@@ -1,13 +1,16 @@
 package $package$.api
 
 import akka.event.Logging._
-import akka.http.scaladsl.model.{ HttpResponse, StatusCodes }
+import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.{Directives, Route}
+import akka.http.interop._
+import play.api.libs.json.JsObject
+import javax.ws.rs.core.MediaType
+import javax.ws.rs.{Consumes, POST, Path, Produces}
 import akka.http.scaladsl.server.{ Directives, Route }
 import $package$.application.ApplicationService
 import $package$.domain._
-import akka.http.interop._
-import play.api.libs.json.JsObject
 import zio._
 import zio.config.ZConfig
 $if(add_server_sent_events_endpoint.truthy || add_websocket_endpoint.truthy)$

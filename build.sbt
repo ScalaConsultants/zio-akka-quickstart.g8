@@ -7,6 +7,8 @@ val zioLoggingVersion     = "0.5.3"
 val zioConfigVersion      = "1.0.0-RC29"
 val flywayVersion         = "7.1.1"
 val testContainersVersion = "0.38.4"
+val swaggerVersion        = "2.2.0"
+val javaxVersion          =  "2.0.1"
 val calibanVersion        = "0.9.2"
 
 lazy val It = config("it").extend(Test)
@@ -46,10 +48,12 @@ val root = (project in file("."))
       "io.scalac"             %% "zio-slick-interop"               % "0.2.0",
       "dev.zio"               %% "zio-interop-reactivestreams"     % "1.0.3.5",
       "ch.qos.logback"        % "logback-classic"                  % "1.2.3",
+      "javax.ws.rs" % "javax.ws.rs-api" %javaxVersion,
       "dev.zio"               %% "zio-logging"                     % zioLoggingVersion,
       "dev.zio"               %% "zio-logging-slf4j"               % zioLoggingVersion,
       "org.postgresql"        % "postgresql"                       % "9.4-1201-jdbc41",
       "org.flywaydb"          % "flyway-core"                      % flywayVersion,
+      "com.github.swagger-akka-http" %% "swagger-akka-http"    % swaggerVersion,
       "com.github.ghostdogpr" %% "caliban"                         % calibanVersion,
       "com.github.ghostdogpr" %% "caliban-akka-http"               % calibanVersion,
       "com.typesafe.akka"     %% "akka-http-testkit"               % akkaHttpVersion % Test,
@@ -57,6 +61,8 @@ val root = (project in file("."))
       "com.typesafe.akka"     %% "akka-actor-testkit-typed"        % akkaVersion % Test,
       "dev.zio"               %% "zio-test-sbt"                    % zioVersion % Test,
       "com.dimafeng"          %% "testcontainers-scala-postgresql" % testContainersVersion % It
+      "dev.zio"               %% "zio-test-sbt"                    % zioVersion % Test
+
     ),
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
   )
