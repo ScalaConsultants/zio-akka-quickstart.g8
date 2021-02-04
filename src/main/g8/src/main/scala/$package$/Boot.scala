@@ -7,7 +7,12 @@ import akka.http.scaladsl.server.RouteConcatenation._
 $endif$
 import akka.http.scaladsl.server.Route
 import com.typesafe.config.{ Config, ConfigFactory }
+$if(slick.truthy)$
 import slick.interop.zio.DatabaseProvider
+$endif$
+$if(doobie.truthy)$
+import com.example.infrastructure.utilities.TransactorLayer
+$endif$
 $if(add_caliban_endpoint.truthy)$
 import zio.clock.Clock
 $endif$
@@ -54,9 +59,7 @@ object Boot extends App {
   private def prepareEnvironment(rawConfig: Config): TaskLayer[HttpServer with FlywayProvider] = {
     val configLayer = TypesafeConfig.fromTypesafeConfig(rawConfig, AppConfig.descriptor)
 
-    // using raw config since it's recommended and the simplest to work with slick
-    val dbConfigLayer  = ZLayer.fromEffect(ZIO(rawConfig.getConfig("db")))
-    val dbBackendLayer = ZLayer.succeed(slick.jdbc.PostgresProfile.backend)
+    val dbConfigLayer = ZLayer.fromEffect(ZIO(rawConfig.getConfig("db")))
 
     // narrowing down to the required part of the config to ensure separation of concerns
     val apiConfigLayer = configLayer.map(c => Has(c.get.api))
@@ -74,32 +77,49 @@ object Boot extends App {
     }
 
     $if(add_caliban_endpoint.truthy || add_server_sent_events_endpoint.truthy || add_websocket_endpoint.truthy)$
-    val subscriberLayer: TaskLayer[Subscriber] = 
+    val subscriberLayer: TaskLayer[Subscriber] =
       loggingLayer >>> EventSubscriber.live
     $endif$
+
+    $if(doobie.truthy)$
+    val transactorLayer: Layer[Throwable, Has[TransactorLayer]] =
+      dbConfigLayer >>> DoobieDatabaseProvider.tranactorLayer
+
+    val doobieLayer: TaskLayer[ItemRepository] =
+      (transactorLayer ++ loggingLayer) >>> DoobieItemRepository.live
+
+    val doobieHealthCheckLayer: TaskLayer[HealthCheck] =
+      (transactorLayer ++ loggingLayer) >>> DoobieHealthCheck.live
+
+    $endif$
+
+    $if(slick.truthy)$
+    val dbBackendLayer = ZLayer.succeed(slick.jdbc.PostgresProfile.backend)
 
     val dbProvider: ZLayer[Any, Throwable, DatabaseProvider] =
       (dbConfigLayer ++ dbBackendLayer) >>> DatabaseProvider.live
 
-    val dbLayer: TaskLayer[ItemRepository] =
+    val slickDbLayer: TaskLayer[ItemRepository] =
       (dbProvider ++ loggingLayer) >>> SlickItemRepository.live
 
-    val healthCheckLayer: TaskLayer[HealthCheck] =
+    val slickHealthCheckLayer: TaskLayer[HealthCheck] =
       (dbProvider ++ loggingLayer) >>> SlickHealthCheck.live
+      $endif$
+
 
     val flywayLayer: TaskLayer[FlywayProvider] = 
       dbConfigLayer >>> FlywayProvider.live
 
     $if(add_caliban_endpoint.truthy || add_server_sent_events_endpoint.truthy || add_websocket_endpoint.truthy)$
     val applicationLayer: ZLayer[Any, Throwable, ApplicationService] = 
-      (dbLayer ++ subscriberLayer) >>> ApplicationService.live
+      ( $if(slick.truthy)$ slickDbLayer ++     $endif$ $if(doobie.truthy)$  doobieLayer ++      $endif$  subscriberLayer) >>> ApplicationService.live
     $else$
-    val applicationLayer: ZLayer[Any, Throwable, ApplicationService] = 
-      dbLayer >>> ApplicationService.live
+    val applicationLayer: ZLayer[Any, Throwable, ApplicationService] =
+      $if(slick.truthy)$ slickDbLayer ++     $endif$ $if(doobie.truthy)$  doobieLayer ++      $endif$ >>> ApplicationService.live
     $endif$
 
     val apiLayer: TaskLayer[Api] = 
-      (apiConfigLayer ++ applicationLayer ++ actorSystemLayer ++ healthCheckLayer ++ loggingLayer) >>> Api.live
+      (apiConfigLayer ++ applicationLayer ++ actorSystemLayer  ++   $if(slick.truthy)$ slickHealthCheckLayer ++     $endif$ $if(doobie.truthy)$  doobieHealthCheckLayer ++      $endif$ loggingLayer) >>> Api.live
 
     $if(add_caliban_endpoint.truthy)$
     val graphQLApiLayer: TaskLayer[GraphQLApi] =

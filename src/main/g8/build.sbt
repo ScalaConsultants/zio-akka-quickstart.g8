@@ -1,6 +1,8 @@
 val akkaHttpVersion       = "10.2.2"
 val akkaVersion           = "2.6.10"
+$if(slick.truthy)$
 val slickVersion          = "3.3.3"
+$endif$
 val zioVersion            = "1.0.3"
 val zioLoggingVersion     = "0.5.4"
 val zioConfigVersion      = "1.0.0-RC31-1"
@@ -9,7 +11,10 @@ val testContainersVersion = "0.38.8"
 $if(add_caliban_endpoint.truthy)$
 val calibanVersion        = "0.9.4"
 $endif$
-
+$if(doobie.truthy)$
+val catsInteropVersion        = "2.2.0.1"
+val doobieVersion = "0.9.0"
+$endif$
 val dockerReleaseSettings = Seq(
   dockerExposedPorts := Seq(8080),
   dockerExposedVolumes := Seq("/opt/docker/logs"),
@@ -31,12 +36,19 @@ val root = (project in file("."))
     name := "$name$",
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
     libraryDependencies ++= Seq(
+      $if(doobie.truthy)$
+      "org.tpolecat" %% "doobie-core"      % doobieVersion,
+      "org.tpolecat" %% "doobie-postgres"  %doobieVersion,
+      "dev.zio" %% "zio-interop-cats" % catsInteropVersion,
+      $endif$
       "com.typesafe.akka"     %% "akka-http"                       % akkaHttpVersion,
       "de.heikoseeberger"     %% "akka-http-play-json"             % "1.35.3",
       "com.typesafe.akka"     %% "akka-actor-typed"                % akkaVersion,
       "com.typesafe.akka"     %% "akka-stream"                     % akkaVersion,
-      "com.typesafe.slick"    %% "slick"                           % slickVersion,
+      $if(slick.truthy)$
+        "com.typesafe.slick"    %% "slick"                           % slickVersion,
       "com.typesafe.slick"    %% "slick-hikaricp"                  % slickVersion,
+      $endif$
       "dev.zio"               %% "zio"                             % zioVersion,
       "dev.zio"               %% "zio-streams"                     % zioVersion,
       "dev.zio"               %% "zio-config"                      % zioConfigVersion,

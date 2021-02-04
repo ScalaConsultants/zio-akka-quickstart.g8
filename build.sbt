@@ -1,13 +1,19 @@
 // Dependencies are needed for Scala Steward to check if there are newer versions
 val akkaHttpVersion       = "10.2.2"
 val akkaVersion           = "2.6.10"
+$if(slick.truthy)$
 val slickVersion          = "3.3.3"
+$endif$
 val zioVersion            = "1.0.3"
 val zioLoggingVersion     = "0.5.4"
 val zioConfigVersion      = "1.0.0-RC31-1"
 val flywayVersion         = "7.5.0"
 val testContainersVersion = "0.38.8"
 val calibanVersion        = "0.9.4"
+$if(doobie.truthy)$
+val catsInteropVersion        = "2.2.0.1"
+val doobieVersion = "0.9.0"
+$endif$
 
 lazy val It = config("it").extend(Test)
 
@@ -31,12 +37,21 @@ val root = (project in file("."))
     )(Resolver.ivyStylePatterns),
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
     libraryDependencies ++= Seq(
+      $if(doobie.truthy)$
+        "org.tpolecat" %% "doobie-core"      % doobieVersion,
+      "org.tpolecat" %% "doobie-postgres"  %doobieVersion,
+      "dev.zio" %% "zio-interop-cats" % catsInteropVersion,
+      $endif$
+      "org.tpolecat" %% "doobie-core"      % doobieVersion,
+      "org.tpolecat" %% "doobie-postgres"  %doobieVersion,
       "com.typesafe.akka"     %% "akka-http"                       % akkaHttpVersion,
       "de.heikoseeberger"     %% "akka-http-play-json"             % "1.35.3",
       "com.typesafe.akka"     %% "akka-actor-typed"                % akkaVersion,
       "com.typesafe.akka"     %% "akka-stream"                     % akkaVersion,
+      $if(slick.truthy)$
       "com.typesafe.slick"    %% "slick"                           % slickVersion,
       "com.typesafe.slick"    %% "slick-hikaricp"                  % slickVersion,
+      $endif$
       "dev.zio"               %% "zio"                             % zioVersion,
       "dev.zio"               %% "zio-streams"                     % zioVersion,
       "dev.zio"               %% "zio-config"                      % zioConfigVersion,

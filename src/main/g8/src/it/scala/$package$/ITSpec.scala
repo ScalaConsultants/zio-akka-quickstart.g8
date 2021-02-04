@@ -1,13 +1,18 @@
 package $package$
 
 import $package$.domain.ItemRepository
-import $package$.infrastructure.{ Postgres, SlickItemRepository }
+import $package$.infrastructure._
 import $package$.infrastructure.Postgres.SchemaAwarePostgresContainer
 import $package$.infrastructure.flyway.FlywayProvider
 import com.typesafe.config.{ Config, ConfigFactory }
-import slick.interop.zio.DatabaseProvider
 import zio.blocking.Blocking
 import zio.duration.durationInt
+$if(slick.truthy)$
+import slick.interop.zio.DatabaseProvider
+$endif$
+$if(doobie.truthy)$
+import com.example.infrastructure.utilities.TransactorLayer
+$endif$
 import zio.logging._
 import zio.logging.slf4j.Slf4jLogger
 import zio.test._
@@ -34,18 +39,18 @@ object ITSpec {
     override def runner: TestRunner[ITEnv, Any] =
       TestRunner(TestExecutor.default(itLayer))
 
-    val blockingLayer: Layer[Nothing, Blocking]       = Blocking.live
-    val postgresLayer: ZLayer[Any, Nothing, Postgres] = blockingLayer >>> Postgres.postgres(schema)
-    $if(add_caliban_endpoint.truthy || add_server_sent_events_endpoint.truthy || add_websocket_endpoint.truthy)$
-    val subscriberLayer: ZLayer[Any, Nothing, Subscriber] = Logging.ignore  >>> EventSubscriber.live.orDie
-    $endif$
-    val dbLayer: ZLayer[
-      Any with Postgres with Blocking,
-      Nothing,
-      TestEnvironment with FlywayProvider with Logging with ItemRepository
-    ] = {
 
-      val config: ZLayer[Postgres, Nothing, Has[Config]] = ZLayer
+    val subscriberLayer: ZLayer[Any, Nothing, Subscriber] = Logging.ignore >>> EventSubscriber.live.orDie
+
+    val dbLayer: ZLayer[
+      Any,
+      Nothing,
+      _root_.zio.test.environment.TestEnvironment with FlywayProvider with Logging with ItemRepository
+    ] = {
+      val blockingLayer: ULayer[Blocking] = Blocking.live
+      val postgresLayer: ULayer[Postgres] = blockingLayer >>> Postgres.postgres(schema)
+
+      val config: ULayer[Has[Config]]                      = postgresLayer >>> ZLayer
         .fromService[SchemaAwarePostgresContainer, Config] { container =>
           val config = ConfigFactory.parseMap(
             Map(
@@ -60,20 +65,22 @@ object ITSpec {
           )
           config
         }
+      $if(doobie.truthy)$
+      val tranactor: Layer[Throwable, Has[TransactorLayer]] =
+      config >>> DoobieDatabaseProvider.tranactorLayer
 
-      val dbProvider: ZLayer[Postgres with Any, Throwable, DatabaseProvider] =
-        config ++ ZLayer.succeed(slick.jdbc.PostgresProfile.backend) >>> DatabaseProvider.live
 
-      val flyWayProvider = config >>> FlywayProvider.live
+      val doobieWithContainerRepository: Layer[Throwable, ItemRepository] =
+        (tranactor ++ Logging.ignore) >>> DoobieItemRepository.live
 
-      val postgresLayer = Postgres.postgres(schema)
-      val blockingLayer = Blocking.live
+      $endif$
+      $if(slick.truthy)$
+      val dbProvider: Layer[Throwable, DatabaseProvider] =
+        postgresLayer >>> config ++ ZLayer.succeed(slick.jdbc.PostgresProfile.backend) >>> DatabaseProvider.live
 
-      val containerDatabaseProvider: ZLayer[Blocking, Throwable, DatabaseProvider] =
-        blockingLayer >>> postgresLayer >>> dbProvider
-
-      val containerRepository: ZLayer[Blocking, Throwable, ItemRepository] =
-        (Logging.ignore ++ containerDatabaseProvider) >>> SlickItemRepository.live
+      val slickWithContainerRepository: Layer[Throwable, ItemRepository] =
+        (Logging.ignore ++ dbProvider) >>> SlickItemRepository.live
+      $endif$
 
       val logging = Slf4jLogger.make { (context, message) =>
         val logFormat     = "[correlation-id = %s] %s"
@@ -82,14 +89,17 @@ object ITSpec {
         )
         logFormat.format(correlationId, message)
       }
-      zio.test.environment.testEnvironment ++ flyWayProvider ++ logging ++ containerRepository
+
+      val flyWayProvider = config >>> FlywayProvider.live
+
+      zio.test.environment.testEnvironment ++ flyWayProvider ++ logging      $if(doobie.truthy)$ ++ doobieWithContainerRepository   $endif$     $if(slick.truthy)$ ++ slickWithContainerRepository   $endif$
     }.orDie
 
      $if(add_caliban_endpoint.truthy || add_server_sent_events_endpoint.truthy || add_websocket_endpoint.truthy)$
     val itLayer: ULayer[ITEnv] =
-      (zio.test.environment.testEnvironment ++ postgresLayer ++ blockingLayer) >+> dbLayer ++ subscriberLayer
+      dbLayer ++ subscriberLayer
     $else$
-    val itLayer: ULayer[ITEnv] = postgresLayer ++ blockingLayer >>> dbLayer
+    val itLayer: ULayer[ITEnv] = dbLayer
     $endif$
   }
 }
