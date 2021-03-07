@@ -2,6 +2,9 @@ val akkaHttpVersion       = "10.2.2"
 val akkaVersion           = "2.6.10"
 val slickVersion          = "3.3.3"
 val zioVersion            = "1.0.3"
+$if(add_cors.truthy)$
+val akkaHttpCorsVersion = "1.1.0"
+$endif$
 val zioLoggingVersion     = "0.5.4"
 val zioConfigVersion      = "1.0.0-RC31-1"
 val flywayVersion         = "7.5.0"
@@ -31,6 +34,9 @@ val root = (project in file("."))
     name := "$name$",
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
     libraryDependencies ++= Seq(
+      $if(add_cors.truthy)$
+       "ch.megard"            %% "akka-http-cors"                  % akkaHttpCorsVersion,
+      $endif$
       "com.typesafe.akka"     %% "akka-http"                       % akkaHttpVersion,
       "de.heikoseeberger"     %% "akka-http-play-json"             % "1.35.3",
       "com.typesafe.akka"     %% "akka-actor-typed"                % akkaVersion,
